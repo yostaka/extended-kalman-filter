@@ -24,20 +24,22 @@ FusionEKF::FusionEKF() {
 
   //measurement covariance matrix - laser
   R_laser_ << 0.0225, 0,
-        0, 0.0225;
+              0, 0.0225;
 
   //measurement covariance matrix - radar
   R_radar_ << 0.09, 0, 0,
-        0, 0.0009, 0,
-        0, 0, 0.09;
+              0, 0.0009, 0,
+              0, 0, 0.09;
 
-  /**
-  TODO:
-    * Finish initializing the FusionEKF.
-    * Set the process and measurement noises
-  */
+  ekf_.P_ = MatrixXd(4, 4);
+  ekf_.P_ << 1000, 0, 0, 0,
+             0, 1000, 0, 0,
+             0, 0, 1000, 0,
+             0, 0, 0, 1000;
 
-
+  ekf_.H_ = MatrixXd(2, 4);
+  ekf_.H_ << 1, 0, 0, 0,
+             0, 1, 0, 0;
 }
 
 /**
@@ -52,14 +54,7 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
    *  Initialization
    ****************************************************************************/
   if (!is_initialized_) {
-    /**
-    TODO:
-      * Initialize the state ekf_.x_ with the first measurement.
-      * Create the covariance matrix.
-      * Remember: you'll need to convert radar from polar to cartesian coordinates.
-    */
     // first measurement
-    cout << "Initialize state vector x" << endl;
     ekf_.x_ = VectorXd(4);
 
     if (measurement_pack.sensor_type_ == MeasurementPackage::RADAR) {
@@ -76,7 +71,6 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
       double vx = ro_dot * cos(theta);
       double vy = ro_dot * sin(theta);
       ekf_.x_ << px, py, vx, vy;
-      cout << "x_ = " << ekf_.x_ << endl;
     }
     else if (measurement_pack.sensor_type_ == MeasurementPackage::LASER) {
       /**
@@ -86,65 +80,24 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
       double px = measurement_pack.raw_measurements_[0];
       double py = measurement_pack.raw_measurements_[1];
       ekf_.x_ << px, py, 0, 0;
-      cout << "x_ = " << endl << ekf_.x_ << endl;
-
     }
 
-    cout << "Create the covariance matrix P " << endl;
-    ekf_.P_ = MatrixXd(4, 4);
-    ekf_.P_ << 1000, 0, 0, 0,
-            0, 1000, 0, 0,
-            0, 0, 1000, 0,
-            0, 0, 0, 1000;
-    cout << "P_ = " << endl << ekf_.P_ << endl;
-
     previous_timestamp_ = measurement_pack.timestamp_;
-    cout << "timestamp = " << previous_timestamp_ << endl;
-
-//    ekf_.R_ = MatrixXd(2, 2);
-//    ekf_.R_ << 0.0225, 0,
-//               0, 0.0225;
-
-    ekf_.H_ = MatrixXd(2, 4);
-    ekf_.H_ << 1, 0, 0, 0,
-               0, 1, 0, 0;
 
     // done initializing, no need to predict or update
     is_initialized_ = true;
     return;
   }
 
-
-//   Skip radar for debugging purpose
-//  if (measurement_pack.sensor_type_ == MeasurementPackage::RADAR) {
-//    return;
-//  }
-//  if (measurement_pack.sensor_type_ != MeasurementPackage::RADAR) {
-//    return;
-//  }
-
-
   /*****************************************************************************
    *  Prediction
    ****************************************************************************/
-
-  /**
-   TODO:
-     * Update the state transition matrix F according to the new elapsed time.
-      - Time is measured in seconds.
-     * Update the process noise covariance matrix.
-     * Use noise_ax = 9 and noise_ay = 9 for your Q matrix.
-   */
 
   long long current_timestamp = measurement_pack.timestamp_;
   double dt = (current_timestamp - previous_timestamp_) / 1000000.0;
   double dt_2 = dt * dt;
   double dt_3 = dt_2 * dt;
   double dt_4 = dt_3 * dt;
-
-//  cout << "dt = " << dt << endl;
-//  cout << "current: " << current_timestamp << endl;
-//  cout << "previous:" << previous_timestamp_ << endl;
 
   ekf_.F_ = MatrixXd(4, 4);
   ekf_.F_ << 1, 0, dt, 0,
@@ -160,8 +113,6 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
           dt_3/2*noise_ax, 0, dt_2*noise_ax, 0,
           0, dt_3/2*noise_ay, 0, dt_2*noise_ay;
 
-//  cout << "Q_ = " << endl << ekf_.Q_ << endl;
-
   ekf_.Predict(dt);
 
   previous_timestamp_ = current_timestamp;
@@ -169,12 +120,6 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
   /*****************************************************************************
    *  Update
    ****************************************************************************/
-
-  /**
-   TODO:
-     * Use the sensor type to perform the update step.
-     * Update the state and covariance matrices.
-   */
 
   if (measurement_pack.sensor_type_ == MeasurementPackage::RADAR) {
     // Radar updates

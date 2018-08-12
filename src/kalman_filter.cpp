@@ -23,27 +23,12 @@ void KalmanFilter::Init(VectorXd &x_in, MatrixXd &P_in, MatrixXd &F_in,
 }
 
 void KalmanFilter::Predict(const double delta_T) {
-  /**
-  TODO:
-    * predict the state
-  */
     x_ = F_ * x_;
     MatrixXd Ft = F_.transpose();
     P_ = F_ * P_ * Ft + Q_;
-
-//    cout << "*** Predict ***" << endl;
-//    cout << "F_ = " << endl << F_ << endl;
-//    cout << "P_ = " << endl << P_ << endl;
-//    cout << "Q_ = " << endl << Q_ << endl;
 }
 
 void KalmanFilter::Update(const VectorXd &z) {
-  /**
-  TODO:
-    * update the state by using Kalman Filter equations
-  */
-//  cout << "*** Update ***" << endl;
-
   VectorXd z_pred = H_ * x_;
   VectorXd y = z - z_pred;
   MatrixXd Ht = H_.transpose();
@@ -52,7 +37,9 @@ void KalmanFilter::Update(const VectorXd &z) {
   MatrixXd PHt = P_ * Ht;
   MatrixXd K = PHt * Si;
 
-  //new estimate
+  // new estimate
+  // x_ is new state matrix expressing most likely state (2d position and 2d velocity)
+  // P_ is new covarience matrix expressing uncertainty of the state
   x_ = x_ + (K * y);
   long x_size = x_.size();
   MatrixXd I = MatrixXd::Identity(x_size, x_size);
@@ -60,30 +47,21 @@ void KalmanFilter::Update(const VectorXd &z) {
 }
 
 void KalmanFilter::UpdateEKF(const VectorXd &z) {
-    /**
-    TODO:
-      * update the state by using Extended Kalman Filter equations
-    */
-//    cout << "*** Update EKF ***" << endl;
-
-    Tools tools;
-    MatrixXd Hj = tools.CalculateJacobian(x_);
-
-//    cout << "Hj = " << endl << Hj << endl;
-
+    // x_ is predicted state matrix set by caller before this function is called
     float px = x_(0);
     float py = x_(1);
     float vx = x_(2);
     float vy = x_(3);
 
+    // Convert state matrix from Cartesian coordinate to Polar coordinate
+    // to match with measurement domain
     VectorXd z_pred = VectorXd(3);
     z_pred << sqrt(px*px + py*py),
               atan(py / px),
               (px*vx + py*vy) / sqrt(px*px + py*py);
 
-//    cout << "z_pred = " << endl << z_pred << endl;
-//    cout << "z = " << endl << z << endl;
-
+    // Adjust the result of atan(py/px) to have range of -pi to pi
+    // Note: atan2 should remove the necessity of this step but atan2 was not available to my environment
     if(px<0) {
         if(py>=0) {
             z_pred(1) += 3.1415926535;
@@ -91,8 +69,9 @@ void KalmanFilter::UpdateEKF(const VectorXd &z) {
             z_pred(1) -= 3.1415926535;
         }
     }
-//    cout << "phi = " << z_pred(1) << " (" << px << ", " << py << ")" << endl;
 
+    // Calculate y vector
+    // Adjust the operation result to have range between -pi to pi
     VectorXd y = z - z_pred;
 
     if(y(1) >= 3.1415926535) {
@@ -101,27 +80,24 @@ void KalmanFilter::UpdateEKF(const VectorXd &z) {
         y(1) += 2*3.1415926535;
     }
 
-//    cout << "y = " << endl << y << endl;
-
+    // Calculate Jacobian matrix
+    Tools tools;
+    MatrixXd Hj = tools.CalculateJacobian(x_);
     MatrixXd Ht = Hj.transpose();
-//    cout << "Ht = " << endl << Ht << endl;
 
-    MatrixXd S = Hj * P_ * Ht;
-//    cout << "S = " << endl << S << endl;
-//    cout << "R_ = " << endl << R_ << endl;
-    S = S + R_;
-//    cout << "S = " << endl << S << endl;
-
+    // Use Jacobian matrix instead of transformation Matrix H comparing to Normal Kalman Filter
+    // Note that Jacobian matrix makes the transformation linear
+    // though Cartesian to Polar coordinate transformation is not linear
+    // Non linear conversion here breaks Gaussian property that breaks
+    // Kalman Filter prerequisite to work.
+    MatrixXd S = Hj * P_ * Ht + R_;
     MatrixXd Si = S.inverse();
-//    cout << "Si = " << endl << Si << endl;
-
     MatrixXd PHt = P_ * Ht;
-//    cout << "PHt = " << endl << PHt << endl;
-
     MatrixXd K = PHt * Si;
-//    cout << "K = " << endl << K << endl;
 
-    //new estimate
+    // new estimate
+    // x_ is new state matrix expressing most likely state (2d position and 2d velocity)
+    // P_ is new covarience matrix expressing uncertainty of the state
     x_ = x_ + (K * y);
     long x_size = x_.size();
     MatrixXd I = MatrixXd::Identity(x_size, x_size);
